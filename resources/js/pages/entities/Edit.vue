@@ -8,22 +8,37 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import * as entities from '@/routes/entities';
+import AccountEditCard from './AccountEditCard.vue';
+import AddAccountDialog from './AddAccountDialog.vue';
 import { ENTITY_COLOR_RING, ENTITY_COLOR_SWATCH } from './colors';
+
+type Account = {
+    id: number;
+    name: string;
+    currency: string;
+    amount: string | number;
+    is_main: boolean;
+};
 
 type Entity = {
     id: number;
     name: string;
     type: 'personal' | 'llc';
     color: string;
+    accounts: Account[];
 };
+
 type ColorOption = { value: string; label: string };
+type CurrencyOption = { value: string; label: string; symbol: string };
 
 const props = defineProps<{
     entity: Entity;
     colors: ColorOption[];
+    currencies: CurrencyOption[];
 }>();
 
 const selectedColor = ref<string>(props.entity.color);
+const openAccountId = ref<number | null>(null);
 
 setLayoutProps({
     breadcrumbs: [
@@ -36,7 +51,7 @@ setLayoutProps({
 <template>
     <Head :title="`Edit ${entity.name}`" />
 
-    <div class="flex flex-col gap-6 p-4">
+    <div class="flex flex-col gap-8 p-4">
         <Heading
             :title="`Edit ${entity.name}`"
             :description="entity.type === 'personal' ? 'Your personal entity. Type cannot be changed.' : 'Update this LLC.'"
@@ -87,5 +102,28 @@ setLayoutProps({
                 </Button>
             </div>
         </Form>
+
+        <section class="max-w-xl space-y-3">
+            <div class="flex items-start justify-between gap-3">
+                <div class="space-y-1">
+                    <h2 class="text-base font-semibold">Accounts</h2>
+                    <p class="text-sm text-muted-foreground">
+                        Click an account to edit its amount and currency.
+                    </p>
+                </div>
+                <AddAccountDialog :entity-id="entity.id" :currencies="currencies" />
+            </div>
+
+            <ul class="flex flex-col gap-2">
+                <li v-for="account in entity.accounts" :key="account.id">
+                    <AccountEditCard
+                        :account="account"
+                        :currencies="currencies"
+                        :open="openAccountId === account.id"
+                        @update:open="(open) => (openAccountId = open ? account.id : null)"
+                    />
+                </li>
+            </ul>
+        </section>
     </div>
 </template>

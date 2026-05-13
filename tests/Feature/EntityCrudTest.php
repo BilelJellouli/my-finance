@@ -2,6 +2,7 @@
 
 use App\Enums\EntityColor;
 use App\Enums\EntityType;
+use App\Models\Account;
 use App\Models\Entity;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -9,17 +10,26 @@ use Laravel\Fortify\Features;
 
 uses(RefreshDatabase::class);
 
+/**
+ * @return array<int, array{name: string, currency: string, is_main: bool}>
+ */
+function mainAccountPayload(string $currency = 'USD'): array
+{
+    return [['name' => 'Main', 'currency' => $currency, 'is_main' => true]];
+}
+
 test('guests cannot access entities list', function () {
     $this->get(route('entities.index'))->assertRedirect(route('login'));
 });
 
 test('user sees their personal entity created on registration', function () {
     $user = User::factory()->create();
-    $user->entities()->create([
+    $entity = $user->entities()->create([
         'name' => 'Personal',
         'type' => EntityType::PERSONAL,
         'color' => EntityColor::GREEN,
     ]);
+    Account::factory()->main()->for($entity)->create();
 
     $this->actingAs($user)
         ->get(route('entities.index'))
@@ -38,6 +48,7 @@ test('user can create an LLC entity', function () {
         ->post(route('entities.store'), [
             'name' => 'Acme LLC',
             'color' => 'blue',
+            'accounts' => mainAccountPayload(),
         ])
         ->assertRedirect(route('entities.index'));
 
@@ -50,7 +61,11 @@ test('store requires name and a valid color', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
-        ->post(route('entities.store'), ['name' => '', 'color' => 'neon'])
+        ->post(route('entities.store'), [
+            'name' => '',
+            'color' => 'neon',
+            'accounts' => mainAccountPayload(),
+        ])
         ->assertSessionHasErrors(['name', 'color']);
 });
 
@@ -61,6 +76,7 @@ test('the form cannot create a second personal entity (always stores as LLC)', f
     $this->actingAs($user)->post(route('entities.store'), [
         'name' => 'Another personal',
         'color' => 'red',
+        'accounts' => mainAccountPayload(),
     ])->assertRedirect(route('entities.index'));
 
     expect($user->entities()->where('type', EntityType::PERSONAL)->count())->toBe(1)

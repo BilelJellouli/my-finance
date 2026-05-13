@@ -2,8 +2,10 @@
 
 namespace App\Actions\Fortify;
 
+use App\Actions\CreateAccount;
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
+use App\Enums\Currency;
 use App\Enums\EntityColor;
 use App\Enums\EntityType;
 use App\Models\User;
@@ -14,6 +16,8 @@ use Laravel\Fortify\Contracts\CreatesNewUsers;
 class CreateNewUser implements CreatesNewUsers
 {
     use PasswordValidationRules, ProfileValidationRules;
+
+    public function __construct(private CreateAccount $createAccount) {}
 
     /**
      * Validate and create a newly registered user.
@@ -34,11 +38,13 @@ class CreateNewUser implements CreatesNewUsers
                 'password' => $input['password'],
             ]);
 
-            $user->entities()->create([
+            $entity = $user->entities()->create([
                 'name' => 'Personal',
                 'type' => EntityType::PERSONAL,
                 'color' => EntityColor::GREEN,
             ]);
+
+            $this->createAccount->execute($entity, 'Main', Currency::TND, isMain: true);
 
             return $user;
         });
