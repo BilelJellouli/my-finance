@@ -31,6 +31,6 @@ class Entity extends Model
 
     public function isPersonal(): bool
     {
-        return $this->type === EntityType::Personal;
+        return $this->type === EntityType::PERSONAL;
     }
 }

@@ -220,3 +220,25 @@ Vue components must have a single root element.
 - IMPORTANT: Activate `inertia-vue-development` when working with Inertia Vue client-side patterns.
 
 </laravel-boost-guidelines>
+
+# Project Conventions
+
+These rules are project-specific and take precedence over any conflicting Laravel Boost guideline above.
+
+## Enums
+
+- Enum cases must be `ALL_CAPS_WITH_UNDERSCORES` (e.g., `FAVORITE_PERSON`, `BEST_LAKE`, `MONTHLY`). This **overrides** the Boost PHP rule about TitleCase enum keys.
+- String-backed values stay lowercase/kebab as appropriate (e.g., `case FAVORITE_PERSON = 'favorite_person';`).
+
+## Actions
+
+- Action classes must expose a public `execute(...)` method. **Do not** use invokable `__invoke` actions.
+- Every action must dispatch a domain event at the end of `execute()`. Event name follows `<Subject><Actioned>` past-tense form (e.g., `UserCreated`, `EntityArchived`, `TransactionImported`).
+- The event should be the last meaningful statement before the return.
+
+## Migrations (prototype phase)
+
+- This app is a **prototype** — there is no production data to preserve.
+- To add, rename, drop, or alter a column, **edit the existing migration** for that table instead of creating a new one. Then re-run `vendor/bin/sail artisan migrate:fresh` (with `--seed` if needed).
+- Only create a new migration when it is genuinely necessary — e.g., a brand-new table, or a structural change that cannot reasonably be expressed by amending an existing migration.
+

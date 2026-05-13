@@ -52,7 +52,7 @@ class EntityController extends Controller implements HasMiddleware
 
         $request->user()->entities()->create([
             'name' => $request->string('name'),
-            'type' => EntityType::Llc,
+            'type' => EntityType::LLC,
             'color' => EntityColor::from($request->string('color')),
         ]);
 

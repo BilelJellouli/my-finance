@@ -4,16 +4,16 @@ namespace App\Enums;
 
 enum EntityColor: string
 {
-    case Green = 'green';
-    case Blue = 'blue';
-    case Purple = 'purple';
-    case Pink = 'pink';
-    case Red = 'red';
-    case Orange = 'orange';
-    case Amber = 'amber';
-    case Teal = 'teal';
-    case Cyan = 'cyan';
-    case Slate = 'slate';
+    case GREEN = 'green';
+    case BLUE = 'blue';
+    case PURPLE = 'purple';
+    case PINK = 'pink';
+    case RED = 'red';
+    case ORANGE = 'orange';
+    case AMBER = 'amber';
+    case TEAL = 'teal';
+    case CYAN = 'cyan';
+    case SLATE = 'slate';
 
     public function label(): string
     {

@@ -4,14 +4,14 @@ namespace App\Enums;
 
 enum EntityType: string
 {
-    case Personal = 'personal';
-    case Llc = 'llc';
+    case PERSONAL = 'personal';
+    case LLC = 'llc';
 
     public function label(): string
     {
         return match ($this) {
-            self::Personal => 'Personal',
-            self::Llc => 'LLC',
+            self::PERSONAL => 'Personal',
+            self::LLC => 'LLC',
         };
     }
 }

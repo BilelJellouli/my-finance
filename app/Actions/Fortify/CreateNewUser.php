@@ -36,8 +36,8 @@ class CreateNewUser implements CreatesNewUsers
 
             $user->entities()->create([
                 'name' => 'Personal',
-                'type' => EntityType::Personal,
-                'color' => EntityColor::Green,
+                'type' => EntityType::PERSONAL,
+                'color' => EntityColor::GREEN,
             ]);
 
             return $user;

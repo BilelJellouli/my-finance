@@ -21,7 +21,7 @@ class EntityFactory extends Factory
         return [
             'user_id' => User::factory(),
             'name' => fake()->company(),
-            'type' => EntityType::Llc,
+            'type' => EntityType::LLC,
             'color' => fake()->randomElement(EntityColor::cases()),
         ];
     }
@@ -30,15 +30,15 @@ class EntityFactory extends Factory
     {
         return $this->state(fn () => [
             'name' => 'Personal',
-            'type' => EntityType::Personal,
-            'color' => EntityColor::Green,
+            'type' => EntityType::PERSONAL,
+            'color' => EntityColor::GREEN,
         ]);
     }
 
     public function llc(): static
     {
         return $this->state(fn () => [
-            'type' => EntityType::Llc,
+            'type' => EntityType::LLC,
         ]);
     }
 }

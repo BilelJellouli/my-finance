@@ -17,8 +17,8 @@ test('user sees their personal entity created on registration', function () {
     $user = User::factory()->create();
     $user->entities()->create([
         'name' => 'Personal',
-        'type' => EntityType::Personal,
-        'color' => EntityColor::Green,
+        'type' => EntityType::PERSONAL,
+        'color' => EntityColor::GREEN,
     ]);
 
     $this->actingAs($user)
@@ -26,8 +26,8 @@ test('user sees their personal entity created on registration', function () {
         ->assertOk();
 
     expect($user->entities()->count())->toBe(1)
-        ->and($user->entities()->first()->type)->toBe(EntityType::Personal)
-        ->and($user->entities()->first()->color)->toBe(EntityColor::Green);
+        ->and($user->entities()->first()->type)->toBe(EntityType::PERSONAL)
+        ->and($user->entities()->first()->color)->toBe(EntityColor::GREEN);
 });
 
 test('user can create an LLC entity', function () {
@@ -41,9 +41,9 @@ test('user can create an LLC entity', function () {
         ])
         ->assertRedirect(route('entities.index'));
 
-    expect($user->entities()->where('type', EntityType::Llc)->first())
+    expect($user->entities()->where('type', EntityType::LLC)->first())
         ->name->toBe('Acme LLC')
-        ->color->toBe(EntityColor::Blue);
+        ->color->toBe(EntityColor::BLUE);
 });
 
 test('store requires name and a valid color', function () {
@@ -63,13 +63,13 @@ test('the form cannot create a second personal entity (always stores as LLC)', f
         'color' => 'red',
     ])->assertRedirect(route('entities.index'));
 
-    expect($user->entities()->where('type', EntityType::Personal)->count())->toBe(1)
-        ->and($user->entities()->where('type', EntityType::Llc)->where('name', 'Another personal')->exists())->toBeTrue();
+    expect($user->entities()->where('type', EntityType::PERSONAL)->count())->toBe(1)
+        ->and($user->entities()->where('type', EntityType::LLC)->where('name', 'Another personal')->exists())->toBeTrue();
 });
 
 test('user can edit their LLC entity', function () {
     $user = User::factory()->create();
-    $llc = Entity::factory()->llc()->for($user)->create(['name' => 'Old', 'color' => EntityColor::Blue]);
+    $llc = Entity::factory()->llc()->for($user)->create(['name' => 'Old', 'color' => EntityColor::BLUE]);
 
     $this->actingAs($user)
         ->put(route('entities.update', $llc), ['name' => 'New', 'color' => 'purple'])
@@ -77,7 +77,7 @@ test('user can edit their LLC entity', function () {
 
     expect($llc->refresh())
         ->name->toBe('New')
-        ->color->toBe(EntityColor::Purple);
+        ->color->toBe(EntityColor::PURPLE);
 });
 
 test('user cannot delete their personal entity', function () {
@@ -134,7 +134,7 @@ test('registering a new user provisions a green personal entity', function () {
 
     expect($user->entities()->count())->toBe(1)
         ->and($user->entities()->first())
-        ->type->toBe(EntityType::Personal)
-        ->color->toBe(EntityColor::Green)
+        ->type->toBe(EntityType::PERSONAL)
+        ->color->toBe(EntityColor::GREEN)
         ->name->toBe('Personal');
 });
