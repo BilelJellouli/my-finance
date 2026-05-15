@@ -47,6 +47,22 @@ class Entity extends Model
         return $this->hasOne(Account::class)->where('is_main', true);
     }
 
+    /**
+     * @return HasOne<Counterparty, $this>
+     */
+    public function counterpartyMirror(): HasOne
+    {
+        return $this->hasOne(Counterparty::class);
+    }
+
+    /**
+     * @return HasMany<PlannedTransaction, $this>
+     */
+    public function plannedTransactions(): HasMany
+    {
+        return $this->hasMany(PlannedTransaction::class, 'owner_entity_id');
+    }
+
     public function isPersonal(): bool
     {
         return $this->type === EntityType::PERSONAL;

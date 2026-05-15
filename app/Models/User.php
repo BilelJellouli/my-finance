@@ -38,4 +38,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Entity::class);
     }
+
+    /**
+     * @return HasMany<Counterparty, $this>
+     */
+    public function counterparties(): HasMany
+    {
+        return $this->hasMany(Counterparty::class);
+    }
 }
