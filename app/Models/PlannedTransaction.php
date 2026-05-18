@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
     'owner_entity_id',
@@ -23,11 +24,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'is_mandatory',
     'note',
     'transfer_group_id',
+    'deletion_reason',
 ])]
 class PlannedTransaction extends Model
 {
     /** @use HasFactory<PlannedTransactionFactory> */
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected function casts(): array
     {

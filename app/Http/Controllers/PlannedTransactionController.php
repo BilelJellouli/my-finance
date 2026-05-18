@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreatePlannedTransaction;
+use App\Actions\DeletePlannedTransaction;
 use App\Actions\UpdatePlannedTransaction;
 use App\Enums\CounterpartyKind;
 use App\Enums\Currency;
 use App\Enums\PlannedTransactionDirection;
 use App\Enums\PlannedTransactionStatus;
+use App\Http\Requests\DeletePlannedTransactionRequest;
 use App\Http\Requests\StorePlannedTransactionRequest;
 use App\Http\Requests\UpdatePlannedTransactionRequest;
 use App\Models\Counterparty;
@@ -207,6 +209,23 @@ class PlannedTransactionController extends Controller implements HasMiddleware
         );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Planned transaction updated.')]);
+
+        return back();
+    }
+
+    public function destroy(
+        DeletePlannedTransactionRequest $request,
+        PlannedTransaction $plannedTransaction,
+        DeletePlannedTransaction $deletePlannedTransaction,
+    ): RedirectResponse {
+        Gate::authorize('delete', $plannedTransaction);
+
+        $deletePlannedTransaction->execute(
+            $plannedTransaction,
+            (string) $request->validated('deletion_reason'),
+        );
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Planned transaction deleted.')]);
 
         return back();
     }

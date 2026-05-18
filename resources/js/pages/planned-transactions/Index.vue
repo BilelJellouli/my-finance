@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Pencil } from 'lucide-vue-next';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { ENTITY_COLOR_SWATCH } from '@/pages/entities/colors';
+import DeletePlannedTransactionDialog from '@/pages/planned-transactions/DeletePlannedTransactionDialog.vue';
 import PlannedTransactionDialog from '@/pages/planned-transactions/PlannedTransactionDialog.vue';
 import * as plannedRoutes from '@/routes/planned-transactions';
 
@@ -233,6 +234,20 @@ function openEdit(txn: Transaction): void {
 watch(editDialogOpen, (value) => {
     if (!value) {
         editingTransaction.value = null;
+    }
+});
+
+const deletingTransaction = ref<Transaction | null>(null);
+const deleteDialogOpen = ref(false);
+
+function openDelete(txn: Transaction): void {
+    deletingTransaction.value = txn;
+    deleteDialogOpen.value = true;
+}
+
+watch(deleteDialogOpen, (value) => {
+    if (!value) {
+        deletingTransaction.value = null;
     }
 });
 </script>
@@ -513,15 +528,26 @@ watch(editDialogOpen, (value) => {
                             </Badge>
                         </td>
                         <td class="px-3 py-2 text-right">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                class="size-7"
-                                aria-label="Edit planned transaction"
-                                @click.stop="openEdit(txn)"
-                            >
-                                <Pencil class="size-3.5" />
-                            </Button>
+                            <div class="flex items-center justify-end gap-1">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="size-7"
+                                    aria-label="Edit planned transaction"
+                                    @click.stop="openEdit(txn)"
+                                >
+                                    <Pencil class="size-3.5" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    class="size-7 text-destructive hover:text-destructive"
+                                    aria-label="Delete planned transaction"
+                                    @click.stop="openDelete(txn)"
+                                >
+                                    <Trash2 class="size-3.5" />
+                                </Button>
+                            </div>
                         </td>
                     </tr>
                 </tbody>
@@ -538,6 +564,13 @@ watch(editDialogOpen, (value) => {
             :currencies="options.currencies"
             :external-counterparties="options.external_counterparties"
             :transaction="editingTransaction"
+        />
+
+        <DeletePlannedTransactionDialog
+            v-if="deletingTransaction"
+            :key="`delete-${deletingTransaction.id}`"
+            v-model:open="deleteDialogOpen"
+            :transaction="deletingTransaction"
         />
 
         <div v-if="transactions.meta.last_page > 1" class="flex items-center justify-end gap-2">

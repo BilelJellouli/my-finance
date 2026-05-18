@@ -21,7 +21,9 @@ return new class extends Migration
             $table->boolean('is_mandatory')->default(true);
             $table->text('note')->nullable();
             $table->uuid('transfer_group_id')->nullable();
+            $table->text('deletion_reason')->nullable();
             $table->timestamps();
+            $table->softDeletes();
 
             $table->index(['owner_entity_id', 'due_date']);
             $table->index(['owner_entity_id', 'status']);

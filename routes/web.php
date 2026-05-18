@@ -24,6 +24,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('planned-transactions.store');
     Route::put('planned-transactions/{plannedTransaction}', [PlannedTransactionController::class, 'update'])
         ->name('planned-transactions.update');
+    Route::delete('planned-transactions/{plannedTransaction}', [PlannedTransactionController::class, 'destroy'])
+        ->name('planned-transactions.destroy');
 });
 
 require __DIR__.'/settings.php';
