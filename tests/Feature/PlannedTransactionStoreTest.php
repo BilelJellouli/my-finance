@@ -45,7 +45,7 @@ test('creating with a new external counterparty creates that counterparty and th
         route('planned-transactions.store'),
         [
             ...basePlannedTransactionPayload($entity->id),
-            'counterparty_mode' => 'external_new',
+            'counterparty_mode' => 'external',
             'external_name' => 'Landlord',
         ],
     );
@@ -77,7 +77,7 @@ test('creating with an existing external counterparty reuses it', function () {
         route('planned-transactions.store'),
         [
             ...basePlannedTransactionPayload($entity->id),
-            'counterparty_mode' => 'external_existing',
+            'counterparty_mode' => 'external',
             'counterparty_id' => $existing->id,
         ],
     )->assertRedirect(route('planned-transactions.index'));
@@ -155,7 +155,7 @@ test('internal counterparty cannot be the owner entity itself', function () {
     )->assertSessionHasErrors('internal_entity_id');
 });
 
-test('external_new mode requires a name', function () {
+test('external mode requires either a counterparty id or a new name', function () {
     $user = User::factory()->create();
     $entity = Entity::factory()->llc()->for($user)->create();
 
@@ -163,9 +163,30 @@ test('external_new mode requires a name', function () {
         route('planned-transactions.store'),
         [
             ...basePlannedTransactionPayload($entity->id),
-            'counterparty_mode' => 'external_new',
+            'counterparty_mode' => 'external',
         ],
     )->assertSessionHasErrors('external_name');
+});
+
+test('external mode prefers existing counterparty over new name when both are provided', function () {
+    Event::fake([PlannedTransactionCreated::class]);
+
+    $user = User::factory()->create();
+    $entity = Entity::factory()->llc()->for($user)->create();
+    $existing = Counterparty::factory()->external()->for($user)->create(['name' => 'Tax Office']);
+
+    $this->actingAs($user)->post(
+        route('planned-transactions.store'),
+        [
+            ...basePlannedTransactionPayload($entity->id),
+            'counterparty_mode' => 'external',
+            'counterparty_id' => $existing->id,
+            'external_name' => 'Ignored Name',
+        ],
+    )->assertRedirect(route('planned-transactions.index'));
+
+    expect(Counterparty::count())->toBe(1)
+        ->and(PlannedTransaction::first()->counterparty_id)->toBe($existing->id);
 });
 
 test('a user cannot create a planned transaction on another users entity', function () {
@@ -177,7 +198,7 @@ test('a user cannot create a planned transaction on another users entity', funct
         route('planned-transactions.store'),
         [
             ...basePlannedTransactionPayload($bobsEntity->id),
-            'counterparty_mode' => 'external_new',
+            'counterparty_mode' => 'external',
             'external_name' => 'Landlord',
         ],
     )->assertForbidden();
@@ -194,7 +215,7 @@ test('amount must be positive', function () {
         [
             ...basePlannedTransactionPayload($entity->id),
             'amount' => -5,
-            'counterparty_mode' => 'external_new',
+            'counterparty_mode' => 'external',
             'external_name' => 'Landlord',
         ],
     )->assertSessionHasErrors('amount');
@@ -213,7 +234,7 @@ test('a planned transaction can be created without a due_date', function () {
         route('planned-transactions.store'),
         [
             ...$payload,
-            'counterparty_mode' => 'external_new',
+            'counterparty_mode' => 'external',
             'external_name' => 'Landlord',
         ],
     )->assertRedirect(route('planned-transactions.index'));
@@ -240,7 +261,7 @@ test('default status is planned when omitted', function () {
         route('planned-transactions.store'),
         [
             ...$payload,
-            'counterparty_mode' => 'external_new',
+            'counterparty_mode' => 'external',
             'external_name' => 'Landlord',
         ],
     )->assertRedirect(route('planned-transactions.index'));

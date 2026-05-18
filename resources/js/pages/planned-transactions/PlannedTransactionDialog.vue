@@ -27,6 +27,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { ENTITY_COLOR_SWATCH } from '@/pages/entities/colors';
+import ExternalCounterpartyCombobox from '@/pages/planned-transactions/ExternalCounterpartyCombobox.vue';
 
 type EntityOption = { id: number; name: string; type: 'personal' | 'llc'; color: string };
 type CurrencyOption = { value: string; label: string; symbol: string };
@@ -67,7 +68,7 @@ const defaultCurrency = props.currencies[0]?.value ?? 'TND';
 
 type FormShape = {
     owner_entity_id: number;
-    counterparty_mode: 'internal' | 'external_existing' | 'external_new';
+    counterparty_mode: 'internal' | 'external';
     internal_entity_id: number | null;
     counterparty_id: number | null;
     external_name: string;
@@ -84,7 +85,7 @@ type FormShape = {
 function blankForm(): FormShape {
     return {
         owner_entity_id: defaultEntityId,
-        counterparty_mode: 'external_new',
+        counterparty_mode: 'external',
         internal_entity_id: null,
         counterparty_id: null,
         external_name: '',
@@ -102,7 +103,7 @@ function blankForm(): FormShape {
 function formFromTransaction(t: EditableTransaction): FormShape {
     return {
         owner_entity_id: t.owner_entity.id,
-        counterparty_mode: 'external_new',
+        counterparty_mode: 'external',
         internal_entity_id: null,
         counterparty_id: null,
         external_name: '',
@@ -286,31 +287,18 @@ const ownerEntityForDisplay = computed(() => props.transaction?.owner_entity);
 
                     <div class="grid gap-2">
                         <Label>Counterparty</Label>
-                        <div class="grid grid-cols-3 gap-2">
+                        <div class="grid grid-cols-2 gap-2">
                             <button
                                 type="button"
                                 class="rounded-md border px-3 py-2 text-xs transition"
                                 :class="
-                                    form.counterparty_mode === 'external_new'
+                                    form.counterparty_mode === 'external'
                                         ? 'border-primary bg-primary/10 text-primary'
                                         : 'border-sidebar-border/70 hover:bg-muted'
                                 "
-                                @click="form.counterparty_mode = 'external_new'"
+                                @click="form.counterparty_mode = 'external'"
                             >
-                                New external
-                            </button>
-                            <button
-                                type="button"
-                                class="rounded-md border px-3 py-2 text-xs transition"
-                                :class="
-                                    form.counterparty_mode === 'external_existing'
-                                        ? 'border-primary bg-primary/10 text-primary'
-                                        : 'border-sidebar-border/70 hover:bg-muted'
-                                "
-                                :disabled="externalCounterparties.length === 0"
-                                @click="form.counterparty_mode = 'external_existing'"
-                            >
-                                Existing external
+                                External
                             </button>
                             <button
                                 type="button"
@@ -327,31 +315,19 @@ const ownerEntityForDisplay = computed(() => props.transaction?.owner_entity);
                             </button>
                         </div>
 
-                        <div v-if="form.counterparty_mode === 'external_new'" class="grid gap-1.5">
-                            <Input
-                                v-model="form.external_name"
-                                placeholder="e.g. Landlord, Tax office, ACME Client"
-                                autocomplete="off"
+                        <div v-if="form.counterparty_mode === 'external'" class="grid gap-1.5">
+                            <ExternalCounterpartyCombobox
+                                :counterparty-id="form.counterparty_id"
+                                :external-name="form.external_name"
+                                :options="externalCounterparties"
+                                :invalid="!!form.errors.external_name || !!form.errors.counterparty_id"
+                                @update:counterparty-id="form.counterparty_id = $event"
+                                @update:external-name="form.external_name = $event"
                             />
-                            <InputError :message="form.errors.external_name" />
-                        </div>
-
-                        <div v-else-if="form.counterparty_mode === 'external_existing'" class="grid gap-1.5">
-                            <Select v-model="form.counterparty_id">
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Pick a counterparty" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem
-                                        v-for="cp in externalCounterparties"
-                                        :key="cp.id"
-                                        :value="cp.id"
-                                    >
-                                        {{ cp.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError :message="form.errors.counterparty_id" />
+                            <p class="text-xs text-muted-foreground">
+                                Type to pick an existing counterparty or add a new one.
+                            </p>
+                            <InputError :message="form.errors.external_name || form.errors.counterparty_id" />
                         </div>
 
                         <div v-else class="grid gap-1.5">

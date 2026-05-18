@@ -263,7 +263,7 @@ class PlannedTransactionController extends Controller implements HasMiddleware
             );
         }
 
-        if ($mode->is('external_existing')) {
+        if ($request->filled('counterparty_id')) {
             return Counterparty::where('user_id', $user->id)
                 ->where('kind', CounterpartyKind::EXTERNAL)
                 ->findOrFail((int) $request->input('counterparty_id'));
