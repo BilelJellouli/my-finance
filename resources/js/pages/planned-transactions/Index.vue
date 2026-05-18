@@ -223,6 +223,8 @@ const statusVariant = {
     cancelled: 'outline',
 } as const;
 
+const addDialogOpen = ref(false);
+
 const editingTransaction = ref<Transaction | null>(null);
 const editDialogOpen = ref(false);
 
@@ -262,6 +264,7 @@ watch(deleteDialogOpen, (value) => {
                 description="Money you plan to pay or receive, by entity and date."
             />
             <PlannedTransactionDialog
+                v-model:open="addDialogOpen"
                 :entities="options.entities"
                 :directions="options.directions"
                 :statuses="options.statuses"

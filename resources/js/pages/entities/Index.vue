@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
 import { Pencil, Plus, Star, Trash2 } from 'lucide-vue-next';
+import { ref } from 'vue';
 import EntityController from '@/actions/App/Http/Controllers/EntityController';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,11 @@ type Account = {
 
 function formatAmount(amount: string | number): string {
     const n = typeof amount === 'string' ? parseFloat(amount) : amount;
-    if (Number.isNaN(n)) return '0.00';
+
+    if (Number.isNaN(n)) {
+return '0.00';
+}
+
     return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -42,6 +47,8 @@ type Entity = {
 defineProps<{
     entities: Entity[];
 }>();
+
+const deletingEntityId = ref<number | null>(null);
 
 defineOptions({
     layout: {
@@ -98,7 +105,11 @@ defineOptions({
                                 <Pencil class="size-4" />
                             </Link>
                         </Button>
-                        <Dialog v-if="entity.type !== 'personal'">
+                        <Dialog
+                            v-if="entity.type !== 'personal'"
+                            :open="deletingEntityId === entity.id"
+                            @update:open="(value) => (deletingEntityId = value ? entity.id : null)"
+                        >
                             <DialogTrigger as-child>
                                 <Button
                                     variant="ghost"
@@ -112,6 +123,7 @@ defineOptions({
                                 <Form
                                     v-bind="EntityController.destroy.form(entity.id)"
                                     :options="{ preserveScroll: true }"
+                                    @success="deletingEntityId = null"
                                     class="space-y-6"
                                     v-slot="{ processing }"
                                 >

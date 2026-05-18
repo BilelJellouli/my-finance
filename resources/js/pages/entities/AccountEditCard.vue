@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Form, useForm } from '@inertiajs/vue3';
 import { ChevronDown, Star, Trash2 } from 'lucide-vue-next';
+import { ref } from 'vue';
 import AccountController from '@/actions/App/Http/Controllers/AccountController';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -56,16 +57,21 @@ const form = useForm({
 
 function formatAmount(amount: string | number): string {
     const n = typeof amount === 'string' ? parseFloat(amount) : amount;
-    if (Number.isNaN(n)) return '0.00';
+
+    if (Number.isNaN(n)) {
+return '0.00';
+}
+
     return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function submit(): void {
-    form.submit({
-        ...AccountController.update(props.account.id),
+    form.submit(AccountController.update(props.account.id), {
         preserveScroll: true,
     });
 }
+
+const deleteDialogOpen = ref(false);
 </script>
 
 <template>
@@ -136,7 +142,7 @@ function submit(): void {
                 <div class="flex items-center justify-between gap-3">
                     <Button type="submit" :disabled="form.processing">Save account</Button>
 
-                    <Dialog v-if="!account.is_main">
+                    <Dialog v-if="!account.is_main" v-model:open="deleteDialogOpen">
                         <DialogTrigger as-child>
                             <Button type="button" variant="ghost" size="sm">
                                 <Trash2 class="size-4 text-destructive" />
@@ -147,6 +153,7 @@ function submit(): void {
                             <Form
                                 v-bind="AccountController.destroy.form(account.id)"
                                 :options="{ preserveScroll: true }"
+                                @success="deleteDialogOpen = false"
                                 class="space-y-6"
                                 v-slot="{ processing: deleteProcessing }"
                             >

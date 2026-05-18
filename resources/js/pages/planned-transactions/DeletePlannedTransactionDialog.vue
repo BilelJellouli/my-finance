@@ -39,8 +39,7 @@ const form = useForm({
 });
 
 function submit(): void {
-    form.submit({
-        ...PlannedTransactionController.destroy(props.transaction.id),
+    form.submit(PlannedTransactionController.destroy(props.transaction.id), {
         preserveScroll: true,
         onSuccess: () => {
             open.value = false;

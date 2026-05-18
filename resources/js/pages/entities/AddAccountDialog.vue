@@ -44,8 +44,7 @@ const form = useForm({
 });
 
 function submit(): void {
-    form.submit({
-        ...AccountController.store(props.entityId),
+    form.submit(AccountController.store(props.entityId), {
         preserveScroll: true,
         onSuccess: () => {
             form.reset();

@@ -147,8 +147,7 @@ function submit(): void {
             ? PlannedTransactionController.update(props.transaction.id)
             : PlannedTransactionController.store();
 
-    form.submit({
-        ...route,
+    form.submit(route, {
         preserveScroll: true,
         onSuccess: () => {
             open.value = false;
