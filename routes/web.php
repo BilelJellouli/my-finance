@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\EntityController;
 use App\Http\Controllers\PlannedTransactionController;
+use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -26,6 +27,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('planned-transactions.update');
     Route::delete('planned-transactions/{plannedTransaction}', [PlannedTransactionController::class, 'destroy'])
         ->name('planned-transactions.destroy');
+
+    Route::post('planned-transactions/{plannedTransaction}/transactions', [TransactionController::class, 'store'])
+        ->name('planned-transactions.transactions.store');
 });
 
 require __DIR__.'/settings.php';

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Pencil, Trash2 } from 'lucide-vue-next';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, CircleDollarSign, Pencil, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
@@ -17,15 +17,24 @@ import {
 import { ENTITY_COLOR_SWATCH } from '@/pages/entities/colors';
 import DeletePlannedTransactionDialog from '@/pages/planned-transactions/DeletePlannedTransactionDialog.vue';
 import PlannedTransactionDialog from '@/pages/planned-transactions/PlannedTransactionDialog.vue';
+import RecordTransactionDialog from '@/pages/planned-transactions/RecordTransactionDialog.vue';
 import * as plannedRoutes from '@/routes/planned-transactions';
 
 type Option = { value: string; label: string };
 type EntityOption = { id: number; name: string; type: 'personal' | 'llc'; color: string };
 
+type RealTransaction = {
+    id: number;
+    amount: string;
+    occurred_on: string;
+    note: string | null;
+};
+
 type Transaction = {
     id: number;
     direction: 'incoming' | 'outgoing';
     amount: string;
+    settled_amount: string;
     currency: string;
     due_date: string | null;
     purpose: string | null;
@@ -35,6 +44,7 @@ type Transaction = {
     transfer_group_id: string | null;
     owner_entity: EntityOption;
     counterparty: { id: number; name: string; kind: 'internal' | 'external' };
+    real_transactions: RealTransaction[];
 };
 
 type Meta = { current_page: number; last_page: number; per_page: number; total: number };
@@ -252,6 +262,31 @@ watch(deleteDialogOpen, (value) => {
         deletingTransaction.value = null;
     }
 });
+
+const recordingTransaction = ref<Transaction | null>(null);
+const recordDialogOpen = ref(false);
+
+function openRecord(txn: Transaction): void {
+    recordingTransaction.value = txn;
+    recordDialogOpen.value = true;
+}
+
+watch(recordDialogOpen, (value) => {
+    if (!value) {
+        recordingTransaction.value = null;
+    }
+});
+
+function settledPercent(txn: Transaction): number {
+    const planned = parseFloat(txn.amount);
+    const settled = parseFloat(txn.settled_amount);
+
+    if (!planned) {
+        return 0;
+    }
+
+    return Math.min(100, Math.max(0, Math.round((settled / planned) * 100)));
+}
 </script>
 
 <template>
@@ -511,14 +546,39 @@ watch(deleteDialogOpen, (value) => {
                                 </Badge>
                             </div>
                         </td>
-                        <td class="px-3 py-2 text-muted-foreground">{{ txn.purpose ?? '—' }}</td>
+                        <td class="px-3 py-2 text-muted-foreground">
+                            <div class="flex items-center gap-1.5">
+                                <span>{{ txn.purpose ?? '—' }}</span>
+                                <button
+                                    v-if="txn.real_transactions.length > 0"
+                                    type="button"
+                                    class="inline-flex items-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+                                    :title="`${txn.real_transactions.length} transaction${txn.real_transactions.length === 1 ? '' : 's'} recorded`"
+                                    @click.stop="openRecord(txn)"
+                                >
+                                    {{ txn.real_transactions.length }}× paid
+                                </button>
+                            </div>
+                        </td>
                         <td class="px-3 py-2 text-right font-mono tabular-nums">
-                            <span :class="txn.direction === 'incoming' ? 'text-emerald-600 dark:text-emerald-400' : ''">
-                                {{ txn.direction === 'incoming' ? '+' : '−' }}{{ formatAmount(txn.amount) }}
-                            </span>
-                            <span class="ml-1 text-xs text-muted-foreground">
-                                {{ currencySymbol[txn.currency] ?? txn.currency }}
-                            </span>
+                            <div class="flex items-center justify-end gap-1.5">
+                                <span :class="txn.direction === 'incoming' ? 'text-emerald-600 dark:text-emerald-400' : ''">
+                                    {{ txn.direction === 'incoming' ? '+' : '−' }}{{ formatAmount(txn.amount) }}
+                                </span>
+                                <span class="text-xs text-muted-foreground">
+                                    {{ currencySymbol[txn.currency] ?? txn.currency }}
+                                </span>
+                            </div>
+                            <div
+                                v-if="parseFloat(txn.settled_amount) > 0 && txn.status !== 'settled'"
+                                class="mt-1 ml-auto h-1 w-20 overflow-hidden rounded-full bg-muted"
+                                :title="`${formatAmount(txn.settled_amount)} of ${formatAmount(txn.amount)} settled`"
+                            >
+                                <div
+                                    class="h-full bg-emerald-500 dark:bg-emerald-400"
+                                    :style="{ width: settledPercent(txn) + '%' }"
+                                />
+                            </div>
                         </td>
                         <td class="px-3 py-2">
                             <Badge :variant="statusVariant[txn.status]" class="capitalize">
@@ -532,6 +592,16 @@ watch(deleteDialogOpen, (value) => {
                         </td>
                         <td class="px-3 py-2 text-right">
                             <div class="flex items-center justify-end gap-1">
+                                <Button
+                                    v-if="txn.status !== 'cancelled' && txn.status !== 'settled'"
+                                    variant="ghost"
+                                    size="icon"
+                                    class="size-7 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                                    aria-label="Record transaction"
+                                    @click.stop="openRecord(txn)"
+                                >
+                                    <CircleDollarSign class="size-3.5" />
+                                </Button>
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -574,6 +644,13 @@ watch(deleteDialogOpen, (value) => {
             :key="`delete-${deletingTransaction.id}`"
             v-model:open="deleteDialogOpen"
             :transaction="deletingTransaction"
+        />
+
+        <RecordTransactionDialog
+            v-if="recordingTransaction"
+            :key="`record-${recordingTransaction.id}`"
+            v-model:open="recordDialogOpen"
+            :planned="recordingTransaction"
         />
 
         <div v-if="transactions.meta.last_page > 1" class="flex items-center justify-end gap-2">

@@ -15,6 +15,7 @@ use App\Http\Requests\UpdatePlannedTransactionRequest;
 use App\Models\Counterparty;
 use App\Models\Entity;
 use App\Models\PlannedTransaction;
+use App\Models\Transaction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,7 +45,12 @@ class PlannedTransactionController extends Controller implements HasMiddleware
         $filters = $this->validatedFilters($request);
 
         $query = PlannedTransaction::query()
-            ->with(['ownerEntity:id,name,type,color', 'counterparty:id,name,kind,entity_id'])
+            ->with([
+                'ownerEntity:id,name,type,color',
+                'counterparty:id,name,kind,entity_id',
+                'transactions' => fn ($q) => $q->orderByDesc('occurred_on')->orderByDesc('id'),
+            ])
+            ->withSum('transactions as settled_amount', 'amount')
             ->whereHas('ownerEntity', fn (Builder $q) => $q->where('user_id', $user->id));
 
         if ($filters['direction']) {
@@ -103,6 +109,7 @@ class PlannedTransactionController extends Controller implements HasMiddleware
                     'id' => $txn->id,
                     'direction' => $txn->direction,
                     'amount' => $txn->amount,
+                    'settled_amount' => number_format((float) ($txn->settled_amount ?? 0), 2, '.', ''),
                     'currency' => $txn->currency,
                     'due_date' => $txn->due_date?->toDateString(),
                     'purpose' => $txn->purpose,
@@ -121,6 +128,12 @@ class PlannedTransactionController extends Controller implements HasMiddleware
                         'name' => $txn->counterparty->displayName(),
                         'kind' => $txn->counterparty->kind,
                     ],
+                    'real_transactions' => $txn->transactions->map(fn (Transaction $t) => [
+                        'id' => $t->id,
+                        'amount' => $t->amount,
+                        'occurred_on' => $t->occurred_on->toDateString(),
+                        'note' => $t->note,
+                    ])->all(),
                 ])->all(),
                 'meta' => [
                     'current_page' => $transactions->currentPage(),
