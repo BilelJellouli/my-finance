@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-vue-next';
-import { computed, reactive, watch } from 'vue';
-import { ENTITY_COLOR_SWATCH } from '@/pages/entities/colors';
-import AddPlannedTransactionDialog from '@/pages/planned-transactions/AddPlannedTransactionDialog.vue';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Pencil } from 'lucide-vue-next';
+import { computed, reactive, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +14,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { ENTITY_COLOR_SWATCH } from '@/pages/entities/colors';
+import PlannedTransactionDialog from '@/pages/planned-transactions/PlannedTransactionDialog.vue';
 import * as plannedRoutes from '@/routes/planned-transactions';
 
 type Option = { value: string; label: string };
@@ -85,21 +85,48 @@ const form = reactive({
 
 const currencySymbol = computed(() => {
     const map: Record<string, string> = {};
-    for (const c of props.options.currencies) map[c.value] = c.symbol;
+
+    for (const c of props.options.currencies) {
+map[c.value] = c.symbol;
+}
+
     return map;
 });
 
 function buildQuery() {
     const query: Record<string, string | number> = {};
-    if (form.direction !== ALL) query.direction = form.direction;
-    if (form.entity_id !== ALL) query.entity_id = Number(form.entity_id);
-    if (form.status !== ALL) query.status = form.status;
-    if (form.purpose !== ALL) query.purpose = form.purpose;
-    if (form.mandatory !== ALL) query.mandatory = form.mandatory;
-    if (form.due_from) query.due_from = form.due_from;
-    if (form.due_to) query.due_to = form.due_to;
+
+    if (form.direction !== ALL) {
+query.direction = form.direction;
+}
+
+    if (form.entity_id !== ALL) {
+query.entity_id = Number(form.entity_id);
+}
+
+    if (form.status !== ALL) {
+query.status = form.status;
+}
+
+    if (form.purpose !== ALL) {
+query.purpose = form.purpose;
+}
+
+    if (form.mandatory !== ALL) {
+query.mandatory = form.mandatory;
+}
+
+    if (form.due_from) {
+query.due_from = form.due_from;
+}
+
+    if (form.due_to) {
+query.due_to = form.due_to;
+}
+
     query.sort = props.filters.sort;
     query.dir = props.filters.dir;
+
     return query;
 }
 
@@ -136,7 +163,10 @@ function applyDates() {
 }
 
 function toggleSort(column: string) {
-    if (!props.options.sortable.includes(column)) return;
+    if (!props.options.sortable.includes(column)) {
+return;
+}
+
     const sameColumn = props.filters.sort === column;
     const nextDir = sameColumn && props.filters.dir === 'asc' ? 'desc' : 'asc';
     const query = buildQuery();
@@ -150,7 +180,10 @@ function toggleSort(column: string) {
 }
 
 function goToPage(page: number) {
-    if (page < 1 || page > props.transactions.meta.last_page) return;
+    if (page < 1 || page > props.transactions.meta.last_page) {
+return;
+}
+
     const query = buildQuery();
     query.page = page;
     router.get(plannedRoutes.index().url, query, {
@@ -162,12 +195,19 @@ function goToPage(page: number) {
 
 function formatAmount(amount: string): string {
     const n = parseFloat(amount);
-    if (Number.isNaN(n)) return '0.00';
+
+    if (Number.isNaN(n)) {
+return '0.00';
+}
+
     return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatDate(iso: string | null): string {
-    if (!iso) return '—';
+    if (!iso) {
+return '—';
+}
+
     return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -181,6 +221,20 @@ const statusVariant = {
     overdue: 'destructive',
     cancelled: 'outline',
 } as const;
+
+const editingTransaction = ref<Transaction | null>(null);
+const editDialogOpen = ref(false);
+
+function openEdit(txn: Transaction): void {
+    editingTransaction.value = txn;
+    editDialogOpen.value = true;
+}
+
+watch(editDialogOpen, (value) => {
+    if (!value) {
+        editingTransaction.value = null;
+    }
+});
 </script>
 
 <template>
@@ -192,7 +246,7 @@ const statusVariant = {
                 title="Planned transactions"
                 description="Money you plan to pay or receive, by entity and date."
             />
-            <AddPlannedTransactionDialog
+            <PlannedTransactionDialog
                 :entities="options.entities"
                 :directions="options.directions"
                 :statuses="options.statuses"
@@ -397,18 +451,20 @@ const statusVariant = {
                                 <ArrowUpDown v-else class="size-3 opacity-40" />
                             </button>
                         </th>
+                        <th class="px-3 py-2 w-px"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-if="transactions.data.length === 0">
-                        <td colspan="8" class="px-3 py-10 text-center text-muted-foreground">
+                        <td colspan="9" class="px-3 py-10 text-center text-muted-foreground">
                             No planned transactions match these filters.
                         </td>
                     </tr>
                     <tr
                         v-for="txn in transactions.data"
                         :key="txn.id"
-                        class="border-t border-sidebar-border/40 hover:bg-muted/40 dark:border-sidebar-border"
+                        class="cursor-pointer border-t border-sidebar-border/40 hover:bg-muted/40 dark:border-sidebar-border"
+                        @click="openEdit(txn)"
                     >
                         <td class="px-3 py-2 font-mono tabular-nums">{{ formatDate(txn.due_date) }}</td>
                         <td class="px-3 py-2">
@@ -456,10 +512,33 @@ const statusVariant = {
                                 {{ txn.is_mandatory ? 'Mandatory' : 'Flexible' }}
                             </Badge>
                         </td>
+                        <td class="px-3 py-2 text-right">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="size-7"
+                                aria-label="Edit planned transaction"
+                                @click.stop="openEdit(txn)"
+                            >
+                                <Pencil class="size-3.5" />
+                            </Button>
+                        </td>
                     </tr>
                 </tbody>
             </table>
         </div>
+
+        <PlannedTransactionDialog
+            v-if="editingTransaction"
+            :key="editingTransaction.id"
+            v-model:open="editDialogOpen"
+            :entities="options.entities"
+            :directions="options.directions"
+            :statuses="options.statuses"
+            :currencies="options.currencies"
+            :external-counterparties="options.external_counterparties"
+            :transaction="editingTransaction"
+        />
 
         <div v-if="transactions.meta.last_page > 1" class="flex items-center justify-end gap-2">
             <Button

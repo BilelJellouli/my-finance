@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreatePlannedTransaction;
+use App\Actions\UpdatePlannedTransaction;
 use App\Enums\CounterpartyKind;
 use App\Enums\Currency;
 use App\Enums\PlannedTransactionDirection;
 use App\Enums\PlannedTransactionStatus;
 use App\Http\Requests\StorePlannedTransactionRequest;
+use App\Http\Requests\UpdatePlannedTransactionRequest;
 use App\Models\Counterparty;
 use App\Models\Entity;
 use App\Models\PlannedTransaction;
@@ -182,6 +184,31 @@ class PlannedTransactionController extends Controller implements HasMiddleware
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Planned transaction added.')]);
 
         return to_route('planned-transactions.index');
+    }
+
+    public function update(
+        UpdatePlannedTransactionRequest $request,
+        PlannedTransaction $plannedTransaction,
+        UpdatePlannedTransaction $updatePlannedTransaction,
+    ): RedirectResponse {
+        Gate::authorize('update', $plannedTransaction);
+
+        $validated = $request->validated();
+
+        $updatePlannedTransaction->execute(
+            plannedTransaction: $plannedTransaction,
+            amount: (float) $validated['amount'],
+            currency: Currency::from($validated['currency']),
+            dueDate: $validated['due_date'] ?? null,
+            purpose: $validated['purpose'] ?? null,
+            status: PlannedTransactionStatus::from($validated['status']),
+            isMandatory: (bool) $validated['is_mandatory'],
+            note: $validated['note'] ?? null,
+        );
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Planned transaction updated.')]);
+
+        return back();
     }
 
     private function resolveCounterparty(StorePlannedTransactionRequest $request, Entity $owner): Counterparty

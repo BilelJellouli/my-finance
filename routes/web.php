@@ -22,6 +22,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('planned-transactions.index');
     Route::post('planned-transactions', [PlannedTransactionController::class, 'store'])
         ->name('planned-transactions.store');
+    Route::put('planned-transactions/{plannedTransaction}', [PlannedTransactionController::class, 'update'])
+        ->name('planned-transactions.update');
 });
 
 require __DIR__.'/settings.php';
