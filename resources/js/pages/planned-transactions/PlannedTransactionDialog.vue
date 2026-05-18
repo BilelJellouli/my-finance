@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
 import { Plus } from 'lucide-vue-next';
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import PlannedTransactionController from '@/actions/App/Http/Controllers/PlannedTransactionController';
+import RecurringPlanController from '@/actions/App/Http/Controllers/RecurringPlanController';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,16 @@ type EditableTransaction = {
     counterparty: { id: number; name: string; kind: 'internal' | 'external' };
 };
 
+type RecurringPlanRef = {
+    id: number;
+    label: string;
+    current_phase: {
+        frequency: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+        interval_step: number;
+        anchor_day: number | null;
+    } | null;
+};
+
 const props = defineProps<{
     entities: EntityOption[];
     directions: DirectionOption[];
@@ -57,6 +68,7 @@ const props = defineProps<{
     currencies: CurrencyOption[];
     externalCounterparties: ExternalCp[];
     transaction?: EditableTransaction | null;
+    recurringPlan?: RecurringPlanRef | null;
 }>();
 
 const open = defineModel<boolean>('open', { default: false });
@@ -122,6 +134,10 @@ const form = useForm<FormShape>(
     props.transaction ? formFromTransaction(props.transaction) : blankForm(),
 );
 
+const editScope = ref<'one' | 'all_future'>('one');
+
+const hasRecurring = computed(() => isEdit.value && !!props.recurringPlan);
+
 const otherEntities = computed(() =>
     props.entities.filter((e) => e.id !== Number(form.owner_entity_id)),
 );
@@ -143,12 +159,42 @@ watch(
 );
 
 function submit(): void {
+    if (
+        hasRecurring.value &&
+        editScope.value === 'all_future' &&
+        props.recurringPlan &&
+        props.transaction
+    ) {
+        const phase = props.recurringPlan.current_phase;
+        const payload = {
+            amount: form.amount,
+            frequency: phase?.frequency ?? 'monthly',
+            interval_step: phase?.interval_step ?? 1,
+            anchor_day: phase?.anchor_day ?? null,
+            effective_from: props.transaction.due_date ?? '',
+            reason: null as string | null,
+        };
+
+        form.transform(() => payload).submit(
+            RecurringPlanController.addPhase(props.recurringPlan.id),
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    open.value = false;
+                    form.clearErrors();
+                },
+            },
+        );
+
+        return;
+    }
+
     const route =
         isEdit.value && props.transaction
             ? PlannedTransactionController.update(props.transaction.id)
             : PlannedTransactionController.store();
 
-    form.submit(route, {
+    form.transform((data) => data).submit(route, {
         preserveScroll: true,
         onSuccess: () => {
             open.value = false;
@@ -196,6 +242,44 @@ const ownerEntityForDisplay = computed(() => props.transaction?.owner_entity);
                         </template>
                     </DialogDescription>
                 </DialogHeader>
+
+                <template v-if="hasRecurring && recurringPlan">
+                    <div class="grid gap-2 rounded-md border border-blue-500/40 bg-blue-500/5 p-3 text-sm dark:border-blue-500/40">
+                        <p class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                            From recurring plan: {{ recurringPlan.label }}
+                        </p>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="flex cursor-pointer items-start gap-2">
+                                <input
+                                    type="radio"
+                                    v-model="editScope"
+                                    value="one"
+                                    class="mt-1"
+                                />
+                                <span>
+                                    <span class="font-medium">Just this occurrence</span>
+                                    <span class="block text-xs text-muted-foreground">
+                                        Change this one row only. Future rows keep the current plan amount.
+                                    </span>
+                                </span>
+                            </label>
+                            <label class="flex cursor-pointer items-start gap-2">
+                                <input
+                                    type="radio"
+                                    v-model="editScope"
+                                    value="all_future"
+                                    class="mt-1"
+                                />
+                                <span>
+                                    <span class="font-medium">This and all future occurrences</span>
+                                    <span class="block text-xs text-muted-foreground">
+                                        Close the current phase from this date and start a new one with the new amount.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </template>
 
                 <template v-if="isEdit && transaction && ownerEntityForDisplay">
                     <div class="grid gap-3 rounded-md border border-sidebar-border/60 bg-muted/40 p-3 text-sm dark:border-sidebar-border">

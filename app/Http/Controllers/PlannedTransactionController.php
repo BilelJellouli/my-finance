@@ -48,6 +48,9 @@ class PlannedTransactionController extends Controller implements HasMiddleware
             ->with([
                 'ownerEntity:id,name,type,color',
                 'counterparty:id,name,kind,entity_id',
+                'recurringPlan' => fn ($q) => $q->select('id', 'label')->with([
+                    'phases' => fn ($q) => $q->whereNull('ends_on')->select('id', 'recurring_plan_id', 'frequency', 'interval_step', 'anchor_day'),
+                ]),
                 'transactions' => fn ($q) => $q->orderByDesc('occurred_on')->orderByDesc('id'),
             ])
             ->withSum('transactions as settled_amount', 'amount')
@@ -79,6 +82,23 @@ class PlannedTransactionController extends Controller implements HasMiddleware
 
         if ($filters['due_to']) {
             $query->whereDate('due_date', '<=', $filters['due_to']);
+        }
+
+        if ($filters['recurring_view'] === 'next') {
+            $query->where(function (Builder $q) {
+                $q->whereNull('recurring_plan_id')
+                    ->orWhereIn('id', function ($sub) {
+                        $sub->selectRaw('DISTINCT ON (recurring_plan_id, owner_entity_id) id')
+                            ->from('planned_transactions')
+                            ->whereNotNull('recurring_plan_id')
+                            ->where('status', PlannedTransactionStatus::PLANNED->value)
+                            ->whereNull('deleted_at')
+                            ->orderBy('recurring_plan_id')
+                            ->orderBy('owner_entity_id')
+                            ->orderBy('due_date')
+                            ->orderBy('id');
+                    });
+            });
         }
 
         $query->orderBy($filters['sort'], $filters['dir'])->orderBy('id');
@@ -134,6 +154,15 @@ class PlannedTransactionController extends Controller implements HasMiddleware
                         'occurred_on' => $t->occurred_on->toDateString(),
                         'note' => $t->note,
                     ])->all(),
+                    'recurring_plan' => $txn->recurringPlan ? [
+                        'id' => $txn->recurringPlan->id,
+                        'label' => $txn->recurringPlan->label,
+                        'current_phase' => $txn->recurringPlan->phases->first() ? [
+                            'frequency' => $txn->recurringPlan->phases->first()->frequency,
+                            'interval_step' => $txn->recurringPlan->phases->first()->interval_step,
+                            'anchor_day' => $txn->recurringPlan->phases->first()->anchor_day,
+                        ] : null,
+                    ] : null,
                 ])->all(),
                 'meta' => [
                     'current_page' => $transactions->currentPage(),
@@ -285,6 +314,7 @@ class PlannedTransactionController extends Controller implements HasMiddleware
      *     mandatory: ?bool,
      *     due_from: ?string,
      *     due_to: ?string,
+     *     recurring_view: string,
      *     sort: string,
      *     dir: string
      * }
@@ -299,6 +329,7 @@ class PlannedTransactionController extends Controller implements HasMiddleware
             'mandatory' => ['nullable', 'in:yes,no'],
             'due_from' => ['nullable', 'date'],
             'due_to' => ['nullable', 'date'],
+            'recurring_view' => ['nullable', 'string', 'in:next,all'],
             'sort' => ['nullable', 'string', 'in:'.implode(',', self::SORTABLE_COLUMNS)],
             'dir' => ['nullable', 'string', 'in:asc,desc'],
         ]);
@@ -315,6 +346,7 @@ class PlannedTransactionController extends Controller implements HasMiddleware
             },
             'due_from' => $validated['due_from'] ?? null,
             'due_to' => $validated['due_to'] ?? null,
+            'recurring_view' => $validated['recurring_view'] ?? 'next',
             'sort' => $validated['sort'] ?? 'due_date',
             'dir' => $validated['dir'] ?? 'asc',
         ];

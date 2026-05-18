@@ -4,8 +4,8 @@ namespace App\Models;
 
 use App\Enums\Currency;
 use App\Enums\PlannedTransactionDirection;
-use App\Enums\PlannedTransactionStatus;
-use Database\Factories\PlannedTransactionFactory;
+use App\Enums\RecurringPlanStatus;
+use Database\Factories\RecurringPlanFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,33 +17,32 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'owner_entity_id',
     'counterparty_id',
     'account_id',
-    'recurring_plan_id',
-    'recurring_plan_phase_id',
     'direction',
-    'amount',
     'currency',
-    'due_date',
+    'label',
     'purpose',
-    'status',
     'is_mandatory',
+    'status',
+    'starts_on',
+    'ends_on',
+    'materialized_until',
     'note',
-    'transfer_group_id',
-    'deletion_reason',
 ])]
-class PlannedTransaction extends Model
+class RecurringPlan extends Model
 {
-    /** @use HasFactory<PlannedTransactionFactory> */
+    /** @use HasFactory<RecurringPlanFactory> */
     use HasFactory, SoftDeletes;
 
     protected function casts(): array
     {
         return [
             'direction' => PlannedTransactionDirection::class,
-            'status' => PlannedTransactionStatus::class,
             'currency' => Currency::class,
-            'amount' => 'decimal:2',
-            'due_date' => 'date',
+            'status' => RecurringPlanStatus::class,
             'is_mandatory' => 'boolean',
+            'starts_on' => 'date',
+            'ends_on' => 'date',
+            'materialized_until' => 'date',
         ];
     }
 
@@ -62,36 +61,29 @@ class PlannedTransaction extends Model
         return $this->belongsTo(Account::class);
     }
 
-    public function recurringPlan(): BelongsTo
+    /**
+     * @return HasMany<RecurringPlanPhase, $this>
+     */
+    public function phases(): HasMany
     {
-        return $this->belongsTo(RecurringPlan::class);
-    }
-
-    public function recurringPlanPhase(): BelongsTo
-    {
-        return $this->belongsTo(RecurringPlanPhase::class);
+        return $this->hasMany(RecurringPlanPhase::class);
     }
 
     /**
-     * @return HasMany<Transaction, $this>
+     * @return HasMany<PlannedTransaction, $this>
      */
-    public function transactions(): HasMany
+    public function plannedTransactions(): HasMany
     {
-        return $this->hasMany(Transaction::class);
+        return $this->hasMany(PlannedTransaction::class);
     }
 
-    public function isIncoming(): bool
+    public function currentPhase(): ?RecurringPlanPhase
     {
-        return $this->direction === PlannedTransactionDirection::INCOMING;
+        return $this->phases()->whereNull('ends_on')->orderByDesc('starts_on')->first();
     }
 
-    public function isOutgoing(): bool
+    public function isActive(): bool
     {
-        return $this->direction === PlannedTransactionDirection::OUTGOING;
-    }
-
-    public function isPartOfTransfer(): bool
-    {
-        return $this->transfer_group_id !== null;
+        return $this->status === RecurringPlanStatus::ACTIVE;
     }
 }

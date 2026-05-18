@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, CircleDollarSign, Pencil, Trash2 } from 'lucide-vue-next';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, CircleDollarSign, Pencil, RotateCw, Trash2 } from 'lucide-vue-next';
 import { computed, reactive, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import DeletePlannedTransactionDialog from '@/pages/planned-transactions/DeleteP
 import PlannedTransactionDialog from '@/pages/planned-transactions/PlannedTransactionDialog.vue';
 import RecordTransactionDialog from '@/pages/planned-transactions/RecordTransactionDialog.vue';
 import * as plannedRoutes from '@/routes/planned-transactions';
+import * as recurringRoutes from '@/routes/recurring-plans';
 
 type Option = { value: string; label: string };
 type EntityOption = { id: number; name: string; type: 'personal' | 'llc'; color: string };
@@ -28,6 +29,16 @@ type RealTransaction = {
     amount: string;
     occurred_on: string;
     note: string | null;
+};
+
+type RecurringPlanRef = {
+    id: number;
+    label: string;
+    current_phase: {
+        frequency: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+        interval_step: number;
+        anchor_day: number | null;
+    } | null;
 };
 
 type Transaction = {
@@ -45,6 +56,7 @@ type Transaction = {
     owner_entity: EntityOption;
     counterparty: { id: number; name: string; kind: 'internal' | 'external' };
     real_transactions: RealTransaction[];
+    recurring_plan: RecurringPlanRef | null;
 };
 
 type Meta = { current_page: number; last_page: number; per_page: number; total: number };
@@ -57,6 +69,7 @@ type Filters = {
     mandatory: boolean | null;
     due_from: string | null;
     due_to: string | null;
+    recurring_view: 'next' | 'all';
     sort: string;
     dir: 'asc' | 'desc';
 };
@@ -92,6 +105,7 @@ const form = reactive({
         props.filters.mandatory === true ? 'yes' : props.filters.mandatory === false ? 'no' : ALL,
     due_from: props.filters.due_from ?? '',
     due_to: props.filters.due_to ?? '',
+    recurring_view: props.filters.recurring_view ?? 'next',
 });
 
 const currencySymbol = computed(() => {
@@ -135,6 +149,10 @@ query.due_from = form.due_from;
 query.due_to = form.due_to;
 }
 
+    if (form.recurring_view !== 'next') {
+        query.recurring_view = form.recurring_view;
+    }
+
     query.sort = props.filters.sort;
     query.dir = props.filters.dir;
 
@@ -157,6 +175,7 @@ function resetFilters() {
     form.mandatory = ALL;
     form.due_from = '';
     form.due_to = '';
+    form.recurring_view = 'next';
     router.get(
         plannedRoutes.index().url,
         { sort: props.filters.sort, dir: props.filters.dir },
@@ -165,7 +184,7 @@ function resetFilters() {
 }
 
 watch(
-    () => [form.direction, form.entity_id, form.status, form.purpose, form.mandatory],
+    () => [form.direction, form.entity_id, form.status, form.purpose, form.mandatory, form.recurring_view],
     () => applyFilters(),
 );
 
@@ -419,11 +438,21 @@ function settledPercent(txn: Transaction): number {
             </div>
         </div>
 
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-3">
             <p class="text-sm text-muted-foreground">
                 {{ transactions.meta.total }} planned transaction{{ transactions.meta.total === 1 ? '' : 's' }}
             </p>
-            <Button variant="ghost" size="sm" @click="resetFilters">Reset filters</Button>
+            <div class="flex items-center gap-3">
+                <label class="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                    <input
+                        type="checkbox"
+                        :checked="form.recurring_view === 'all'"
+                        @change="form.recurring_view = ($event.target as HTMLInputElement).checked ? 'all' : 'next'"
+                    />
+                    <span>Show all recurring occurrences</span>
+                </label>
+                <Button variant="ghost" size="sm" @click="resetFilters">Reset filters</Button>
+            </div>
         </div>
 
         <div class="overflow-x-auto rounded-xl border border-sidebar-border/70 bg-background dark:border-sidebar-border">
@@ -547,7 +576,7 @@ function settledPercent(txn: Transaction): number {
                             </div>
                         </td>
                         <td class="px-3 py-2 text-muted-foreground">
-                            <div class="flex items-center gap-1.5">
+                            <div class="flex flex-wrap items-center gap-1.5">
                                 <span>{{ txn.purpose ?? '—' }}</span>
                                 <button
                                     v-if="txn.real_transactions.length > 0"
@@ -558,6 +587,16 @@ function settledPercent(txn: Transaction): number {
                                 >
                                     {{ txn.real_transactions.length }}× paid
                                 </button>
+                                <Link
+                                    v-if="txn.recurring_plan"
+                                    :href="recurringRoutes.show(txn.recurring_plan.id).url"
+                                    class="inline-flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-500/20 dark:text-blue-300"
+                                    :title="`From recurring plan: ${txn.recurring_plan.label}`"
+                                    @click.stop
+                                >
+                                    <RotateCw class="size-3" />
+                                    {{ txn.recurring_plan.label }}
+                                </Link>
                             </div>
                         </td>
                         <td class="px-3 py-2 text-right font-mono tabular-nums">
@@ -637,6 +676,7 @@ function settledPercent(txn: Transaction): number {
             :currencies="options.currencies"
             :external-counterparties="options.external_counterparties"
             :transaction="editingTransaction"
+            :recurring-plan="editingTransaction.recurring_plan"
         />
 
         <DeletePlannedTransactionDialog
