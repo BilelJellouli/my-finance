@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EntityController;
 use App\Http\Controllers\PlannedTransactionController;
 use App\Http\Controllers\RecurringPlanController;
@@ -13,7 +14,7 @@ Route::inertia('/', 'Welcome', [
 ])->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::resource('entities', EntityController::class)->except(['show']);
     Route::post('entities/{entity}/accounts', [AccountController::class, 'store'])->name('accounts.store');
