@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Actions\CreateAccount;
+use App\Enums\CounterpartyKind;
 use App\Enums\Currency;
 use App\Enums\EntityColor;
 use App\Enums\EntityType;
+use App\Enums\TransactionKind;
 use App\Http\Requests\StoreEntityRequest;
 use App\Http\Requests\UpdateEntityRequest;
+use App\Models\Counterparty;
 use App\Models\Entity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,14 +32,19 @@ class EntityController extends Controller implements HasMiddleware
 
     public function index(Request $request): Response
     {
-        $entities = $request->user()
-            ->entities()
-            ->with(['accounts' => fn ($query) => $query->orderByDesc('is_main')->orderBy('name')])
+        $user = $request->user();
+
+        $entities = $user->entities()
+            ->with(['accounts' => fn ($query) => $query
+                ->withSum('transactionsTo as incoming_sum', 'amount')
+                ->withSum('transactionsFrom as outgoing_sum', 'amount')
+                ->orderByDesc('is_main')
+                ->orderBy('name')])
             ->orderByRaw("CASE WHEN type = 'personal' THEN 0 ELSE 1 END")
             ->orderBy('name')
             ->get(['id', 'name', 'type', 'color']);
 
-        $entities = $entities->map(fn (Entity $entity) => [
+        $entitiesPayload = $entities->map(fn (Entity $entity) => [
             'id' => $entity->id,
             'name' => $entity->name,
             'type' => $entity->type,
@@ -46,12 +54,32 @@ class EntityController extends Controller implements HasMiddleware
                 'name' => $account->name,
                 'currency' => $account->currency,
                 'amount' => $account->amount,
+                'current_balance' => number_format($account->currentBalance(), 2, '.', ''),
                 'is_main' => $account->is_main,
             ])->all(),
         ])->all();
 
+        $externalCounterparties = $user->counterparties()
+            ->where('kind', CounterpartyKind::EXTERNAL)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return Inertia::render('entities/Index', [
-            'entities' => $entities,
+            'entities' => $entitiesPayload,
+            'transaction_options' => [
+                'kinds' => array_map(
+                    fn (TransactionKind $k) => ['value' => $k->value, 'label' => $k->label()],
+                    TransactionKind::cases(),
+                ),
+                'currencies' => array_map(
+                    fn (Currency $c) => ['value' => $c->value, 'label' => $c->label(), 'symbol' => $c->symbol()],
+                    Currency::cases(),
+                ),
+                'external_counterparties' => $externalCounterparties->map(fn (Counterparty $c) => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                ])->all(),
+            ],
         ]);
     }
 
@@ -99,7 +127,11 @@ class EntityController extends Controller implements HasMiddleware
     {
         Gate::authorize('update', $entity);
 
-        $entity->load(['accounts' => fn ($query) => $query->orderByDesc('is_main')->orderBy('name')]);
+        $entity->load(['accounts' => fn ($query) => $query
+            ->withSum('transactionsTo as incoming_sum', 'amount')
+            ->withSum('transactionsFrom as outgoing_sum', 'amount')
+            ->orderByDesc('is_main')
+            ->orderBy('name')]);
 
         return Inertia::render('entities/Edit', [
             'entity' => [
@@ -109,6 +141,7 @@ class EntityController extends Controller implements HasMiddleware
                     'name' => $account->name,
                     'currency' => $account->currency,
                     'amount' => $account->amount,
+                    'current_balance' => number_format($account->currentBalance(), 2, '.', ''),
                     'is_main' => $account->is_main,
                 ])->all(),
             ],

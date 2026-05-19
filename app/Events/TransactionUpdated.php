@@ -6,7 +6,7 @@ use App\Models\Transaction;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class TransactionCreated
+class TransactionUpdated
 {
     use Dispatchable, SerializesModels;
 

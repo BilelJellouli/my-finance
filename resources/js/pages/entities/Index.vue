@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Form, Head, Link } from '@inertiajs/vue3';
-import { Pencil, Plus, Star, Trash2 } from 'lucide-vue-next';
-import { ref } from 'vue';
+import { CircleDollarSign, Pencil, Plus, Star, Trash2 } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 import EntityController from '@/actions/App/Http/Controllers/EntityController';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,9 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import TransactionDialog from '@/pages/transactions/TransactionDialog.vue';
 import * as entityRoutes from '@/routes/entities';
+import type { EntityWithAccounts } from '@/types';
 import { ENTITY_COLOR_SWATCH } from './colors';
 
 type Account = {
@@ -23,6 +25,7 @@ type Account = {
     name: string;
     currency: string;
     amount: string | number;
+    current_balance: string;
     is_main: boolean;
 };
 
@@ -44,11 +47,40 @@ type Entity = {
     accounts: Account[];
 };
 
-defineProps<{
+type Option = { value: string; label: string };
+
+const props = defineProps<{
     entities: Entity[];
+    transaction_options: {
+        kinds: Option[];
+        currencies: { value: string; label: string; symbol: string }[];
+        external_counterparties: { id: number; name: string }[];
+    };
 }>();
 
 const deletingEntityId = ref<number | null>(null);
+const recordOpen = ref(false);
+const recordFromAccountId = ref<number | null>(null);
+
+const dialogEntities = computed<EntityWithAccounts[]>(() =>
+    props.entities.map((entity) => ({
+        id: entity.id,
+        name: entity.name,
+        type: entity.type,
+        color: entity.color,
+        accounts: entity.accounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            currency: account.currency,
+            current_balance: account.current_balance,
+        })),
+    })),
+);
+
+function openRecord(accountId: number): void {
+    recordFromAccountId.value = accountId;
+    recordOpen.value = true;
+}
 
 defineOptions({
     layout: {
@@ -166,10 +198,19 @@ defineOptions({
                             <span class="truncate">{{ account.name }}</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="font-mono tabular-nums">{{ formatAmount(account.amount) }}</span>
+                            <span class="font-mono tabular-nums">{{ formatAmount(account.current_balance) }}</span>
                             <span class="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                                 {{ account.currency }}
                             </span>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                class="size-7"
+                                :aria-label="`Record transaction on ${account.name}`"
+                                @click="openRecord(account.id)"
+                            >
+                                <CircleDollarSign class="size-4" />
+                            </Button>
                         </div>
                     </li>
                 </ul>
@@ -181,5 +222,16 @@ defineOptions({
                 </p>
             </div>
         </div>
+
+        <TransactionDialog
+            v-if="recordFromAccountId !== null"
+            :key="`record-${recordFromAccountId}`"
+            v-model:open="recordOpen"
+            :entities="dialogEntities"
+            :kinds="transaction_options.kinds"
+            :currencies="transaction_options.currencies"
+            :external-counterparties="transaction_options.external_counterparties"
+            :default-from-account-id="recordFromAccountId"
+        />
     </div>
 </template>

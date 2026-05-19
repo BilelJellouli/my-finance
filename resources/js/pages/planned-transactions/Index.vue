@@ -17,12 +17,18 @@ import {
 import { ENTITY_COLOR_SWATCH } from '@/pages/entities/colors';
 import DeletePlannedTransactionDialog from '@/pages/planned-transactions/DeletePlannedTransactionDialog.vue';
 import PlannedTransactionDialog from '@/pages/planned-transactions/PlannedTransactionDialog.vue';
-import RecordTransactionDialog from '@/pages/planned-transactions/RecordTransactionDialog.vue';
+import TransactionDialog from '@/pages/transactions/TransactionDialog.vue';
 import * as plannedRoutes from '@/routes/planned-transactions';
 import * as recurringRoutes from '@/routes/recurring-plans';
 
 type Option = { value: string; label: string };
-type EntityOption = { id: number; name: string; type: 'personal' | 'llc'; color: string };
+type EntityOption = {
+    id: number;
+    name: string;
+    type: 'personal' | 'llc';
+    color: string;
+    accounts: { id: number; name: string; currency: string; current_balance: string }[];
+};
 
 type RealTransaction = {
     id: number;
@@ -53,8 +59,11 @@ type Transaction = {
     is_mandatory: boolean;
     note: string | null;
     transfer_group_id: string | null;
+    account_id: number | null;
+    mirror_account_id: number | null;
+    owner_entity_id: number;
     owner_entity: EntityOption;
-    counterparty: { id: number; name: string; kind: 'internal' | 'external' };
+    counterparty: { id: number; name: string; kind: 'internal' | 'external'; entity_id: number | null };
     real_transactions: RealTransaction[];
     recurring_plan: RecurringPlanRef | null;
 };
@@ -84,6 +93,7 @@ const props = defineProps<{
         currencies: { value: string; label: string; symbol: string }[];
         purposes: string[];
         external_counterparties: { id: number; name: string }[];
+        kinds: Option[];
         sortable: string[];
     };
 }>();
@@ -686,11 +696,29 @@ function settledPercent(txn: Transaction): number {
             :transaction="deletingTransaction"
         />
 
-        <RecordTransactionDialog
+        <TransactionDialog
             v-if="recordingTransaction"
             :key="`record-${recordingTransaction.id}`"
             v-model:open="recordDialogOpen"
-            :planned="recordingTransaction"
+            :entities="options.entities"
+            :kinds="options.kinds"
+            :currencies="options.currencies"
+            :external-counterparties="options.external_counterparties"
+            :selected-planned="{
+                id: recordingTransaction.id,
+                direction: recordingTransaction.direction,
+                amount: recordingTransaction.amount,
+                settled_amount: recordingTransaction.settled_amount,
+                currency: recordingTransaction.currency,
+                due_date: recordingTransaction.due_date,
+                purpose: recordingTransaction.purpose,
+                status: recordingTransaction.status,
+                account_id: recordingTransaction.account_id,
+                mirror_account_id: recordingTransaction.mirror_account_id,
+                owner_entity_id: recordingTransaction.owner_entity_id,
+                counterparty: recordingTransaction.counterparty,
+                real_transactions: recordingTransaction.real_transactions,
+            }"
         />
 
         <div v-if="transactions.meta.last_page > 1" class="flex items-center justify-end gap-2">

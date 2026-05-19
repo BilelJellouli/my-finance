@@ -85,7 +85,7 @@ function submit(): void {
 
                 <div class="grid gap-3 sm:grid-cols-[1fr_180px]">
                     <div class="grid gap-2">
-                        <Label for="add-account-amount">Amount</Label>
+                        <Label for="add-account-amount">Opening balance</Label>
                         <Input
                             id="add-account-amount"
                             v-model="form.amount"

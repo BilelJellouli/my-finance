@@ -36,7 +36,13 @@ class DashboardController extends Controller implements HasMiddleware
 
         /** @var Collection<int, Entity> $entities */
         $entities = $user->entities()
-            ->with(['accounts' => fn ($q) => $q->orderByDesc('is_main')->orderBy('name')])
+            ->with([
+                'accounts' => fn ($q) => $q
+                    ->withSum('transactionsTo as incoming_sum', 'amount')
+                    ->withSum('transactionsFrom as outgoing_sum', 'amount')
+                    ->orderByDesc('is_main')
+                    ->orderBy('name'),
+            ])
             ->orderByRaw("CASE WHEN type = 'personal' THEN 0 ELSE 1 END")
             ->orderBy('name')
             ->get();
@@ -181,7 +187,9 @@ class DashboardController extends Controller implements HasMiddleware
                     'name' => $a->name,
                     'currency' => $a->currency->value,
                     'symbol' => $a->currency->symbol(),
-                    'amount' => $this->money((float) $a->amount),
+                    'opening_balance' => $this->money((float) $a->amount),
+                    'amount' => $this->money($a->currentBalance()),
+                    'current_balance' => $this->money($a->currentBalance()),
                     'is_main' => $a->is_main,
                 ])->all(),
             ];
@@ -200,7 +208,7 @@ class DashboardController extends Controller implements HasMiddleware
 
         foreach ($accounts as $account) {
             $code = $account->currency->value;
-            $totals[$code] = ($totals[$code] ?? 0.0) + (float) $account->amount;
+            $totals[$code] = ($totals[$code] ?? 0.0) + $account->currentBalance();
         }
 
         return $totals;

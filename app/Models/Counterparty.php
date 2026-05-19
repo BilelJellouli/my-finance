@@ -43,6 +43,14 @@ class Counterparty extends Model
         return $this->hasMany(PlannedTransaction::class);
     }
 
+    /**
+     * @return HasMany<Transaction, $this>
+     */
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
     public function isInternal(): bool
     {
         return $this->kind === CounterpartyKind::INTERNAL;

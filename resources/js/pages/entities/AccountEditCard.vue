@@ -31,6 +31,7 @@ type Account = {
     name: string;
     currency: string;
     amount: string | number;
+    current_balance: string;
     is_main: boolean;
 };
 
@@ -93,7 +94,7 @@ const deleteDialogOpen = ref(false);
                 <span class="truncate font-medium">{{ account.name }}</span>
             </div>
             <div class="flex items-center gap-3 text-sm">
-                <span class="font-mono tabular-nums">{{ formatAmount(account.amount) }}</span>
+                <span class="font-mono tabular-nums">{{ formatAmount(account.current_balance) }}</span>
                 <span class="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                     {{ account.currency }}
                 </span>
@@ -107,7 +108,7 @@ const deleteDialogOpen = ref(false);
             <form @submit.prevent="submit" class="space-y-4">
                 <div class="grid gap-3 sm:grid-cols-[1fr_180px] sm:items-end">
                     <div class="grid gap-2">
-                        <Label :for="`account-${account.id}-amount`">Amount</Label>
+                        <Label :for="`account-${account.id}-amount`">Opening balance</Label>
                         <Input
                             :id="`account-${account.id}-amount`"
                             v-model="form.amount"
@@ -116,6 +117,9 @@ const deleteDialogOpen = ref(false);
                             inputmode="decimal"
                             autocomplete="off"
                         />
+                        <p class="text-xs text-muted-foreground">
+                            Current balance: <span class="font-mono tabular-nums">{{ formatAmount(account.current_balance) }} {{ account.currency }}</span> after recorded transactions.
+                        </p>
                         <InputError :message="form.errors.amount" />
                     </div>
 

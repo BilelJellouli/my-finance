@@ -2,76 +2,215 @@
 
 namespace App\Actions;
 
+use App\Enums\CounterpartyKind;
+use App\Enums\Currency;
 use App\Enums\PlannedTransactionStatus;
+use App\Enums\TransactionKind;
 use App\Events\TransactionCreated;
+use App\Models\Account;
+use App\Models\Counterparty;
 use App\Models\PlannedTransaction;
 use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class CreateTransaction
 {
     /**
-     * Record a real transaction against a planned one. Enforces:
-     *  - amount > 0
-     *  - sum of existing transactions + new amount <= planned amount
-     *  - planned status is not cancelled
+     * Record a transaction. Supports three shapes:
+     *  - Standalone outgoing (fromAccount set, toAccount null), optional external counterparty.
+     *  - Standalone incoming (toAccount set, fromAccount null), optional external counterparty.
+     *  - Transfer (both accounts set) — same currency, distinct accounts.
      *
-     * When the planned row is part of a transfer pair, a mirror transaction is
-     * created on the sibling planned row in the same DB transaction so both
-     * sides stay in lockstep. When the cumulative total reaches the planned
-     * amount the planned status auto-flips to settled (on both sides).
-     *
-     * @return array<int, Transaction> Single row for normal txns; linked pair for transfer-group plans.
+     * Optionally linked to a planned transaction. If the planned row is part of a transfer-group
+     * pair, settling it fully also flips the sibling planned row to SETTLED — but no extra
+     * Transaction row is created (one Transaction = one money movement).
      */
     public function execute(
-        PlannedTransaction $plannedTransaction,
+        User $user,
         float $amount,
         string $occurredOn,
+        TransactionKind $kind,
+        Currency $currency,
+        ?Account $fromAccount = null,
+        ?Account $toAccount = null,
+        ?Counterparty $counterparty = null,
+        ?PlannedTransaction $plannedTransaction = null,
         ?string $note = null,
-    ): array {
-        if ($plannedTransaction->status === PlannedTransactionStatus::CANCELLED) {
+    ): Transaction {
+        $this->validateMovement(
+            user: $user,
+            amount: $amount,
+            currency: $currency,
+            fromAccount: $fromAccount,
+            toAccount: $toAccount,
+            counterparty: $counterparty,
+            plannedTransaction: $plannedTransaction,
+        );
+
+        if ($plannedTransaction !== null) {
+            $this->validatePlannedCap($plannedTransaction, $amount, excludeTransactionId: null);
+        }
+
+        $this->ensureFromAccountCovers($fromAccount, $amount, excludeTransactionId: null);
+
+        $transaction = DB::transaction(function () use (
+            $amount,
+            $occurredOn,
+            $kind,
+            $currency,
+            $fromAccount,
+            $toAccount,
+            $counterparty,
+            $plannedTransaction,
+            $note,
+        ) {
+            $row = Transaction::create([
+                'planned_transaction_id' => $plannedTransaction?->id,
+                'from_account_id' => $fromAccount?->id,
+                'to_account_id' => $toAccount?->id,
+                'counterparty_id' => $counterparty?->id,
+                'amount' => $amount,
+                'currency' => $currency,
+                'kind' => $kind,
+                'occurred_on' => $occurredOn,
+                'note' => $note,
+            ]);
+
+            if ($plannedTransaction !== null) {
+                $this->syncPlannedStatusAfterChange($plannedTransaction);
+            }
+
+            return $row;
+        });
+
+        TransactionCreated::dispatch($transaction);
+
+        return $transaction;
+    }
+
+    /**
+     * Throws ValidationException if the movement is malformed or not owned by $user.
+     */
+    public function validateMovement(
+        User $user,
+        float $amount,
+        Currency $currency,
+        ?Account $fromAccount,
+        ?Account $toAccount,
+        ?Counterparty $counterparty,
+        ?PlannedTransaction $plannedTransaction,
+    ): void {
+        if ($amount <= 0) {
             throw ValidationException::withMessages([
-                'amount' => __('Cannot record a transaction on a cancelled planned transaction.'),
+                'amount' => __('Amount must be greater than zero.'),
             ]);
         }
 
-        $rows = DB::transaction(function () use ($plannedTransaction, $amount, $occurredOn, $note) {
-            $primary = $this->recordOn($plannedTransaction, $amount, $occurredOn, $note);
+        if ($fromAccount === null && $toAccount === null && $plannedTransaction === null) {
+            throw ValidationException::withMessages([
+                'from_account_id' => __('A transaction must touch at least one account.'),
+            ]);
+        }
 
-            if ($plannedTransaction->transfer_group_id === null) {
-                return [$primary];
+        if ($fromAccount !== null && $toAccount !== null) {
+            if ($fromAccount->id === $toAccount->id) {
+                throw ValidationException::withMessages([
+                    'to_account_id' => __('From and to accounts must be different.'),
+                ]);
             }
-
-            $created = [$primary];
-
-            $siblings = PlannedTransaction::query()
-                ->where('transfer_group_id', $plannedTransaction->transfer_group_id)
-                ->where('id', '!=', $plannedTransaction->id)
-                ->lockForUpdate()
-                ->get();
-
-            foreach ($siblings as $sibling) {
-                $created[] = $this->recordOn($sibling, $amount, $occurredOn, $note);
+            if ($fromAccount->currency !== $toAccount->currency) {
+                throw ValidationException::withMessages([
+                    'currency' => __('Cross-currency transfers are not supported yet.'),
+                ]);
             }
+        }
 
-            return $created;
-        });
+        foreach ([$fromAccount, $toAccount] as $account) {
+            if ($account !== null && $account->currency !== $currency) {
+                throw ValidationException::withMessages([
+                    'currency' => __('Transaction currency must match the account currency.'),
+                ]);
+            }
+            if ($account !== null && $account->entity->user_id !== $user->id) {
+                throw ValidationException::withMessages([
+                    'from_account_id' => __('You do not own this account.'),
+                ]);
+            }
+        }
 
-        TransactionCreated::dispatch($rows);
+        if ($counterparty !== null) {
+            if ($counterparty->user_id !== $user->id) {
+                throw ValidationException::withMessages([
+                    'counterparty_id' => __('You do not own this counterparty.'),
+                ]);
+            }
+            if ($counterparty->kind !== CounterpartyKind::EXTERNAL) {
+                throw ValidationException::withMessages([
+                    'counterparty_id' => __('Only external counterparties can be attached to a transaction directly.'),
+                ]);
+            }
+        }
 
-        return $rows;
+        if ($plannedTransaction !== null) {
+            if ($plannedTransaction->ownerEntity->user_id !== $user->id) {
+                throw ValidationException::withMessages([
+                    'planned_transaction_id' => __('You do not own this planned transaction.'),
+                ]);
+            }
+            if ($plannedTransaction->currency !== $currency) {
+                throw ValidationException::withMessages([
+                    'currency' => __('Transaction currency must match the planned transaction currency.'),
+                ]);
+            }
+            if ($plannedTransaction->status === PlannedTransactionStatus::CANCELLED) {
+                throw ValidationException::withMessages([
+                    'amount' => __('Cannot record a transaction on a cancelled planned transaction.'),
+                ]);
+            }
+        }
     }
 
-    private function recordOn(
+    /**
+     * Reject the movement if the source account does not have enough balance to cover it.
+     * Past-dated transactions are also checked against today's balance — adjust the opening
+     * balance if you need to backfill history that would otherwise overdraw.
+     */
+    public function ensureFromAccountCovers(
+        ?Account $fromAccount,
+        float $amount,
+        ?int $excludeTransactionId,
+    ): void {
+        if ($fromAccount === null) {
+            return;
+        }
+
+        $balance = $fromAccount->currentBalance($excludeTransactionId);
+
+        if ($balance + 0.0001 < $amount) {
+            throw ValidationException::withMessages([
+                'amount' => __('Account :name has only :balance available.', [
+                    'name' => $fromAccount->name,
+                    'balance' => number_format(max($balance, 0), 2),
+                ]),
+            ]);
+        }
+    }
+
+    /**
+     * Caps cumulative settlement against the planned amount.
+     */
+    public function validatePlannedCap(
         PlannedTransaction $plannedTransaction,
         float $amount,
-        string $occurredOn,
-        ?string $note,
-    ): Transaction {
+        ?int $excludeTransactionId,
+    ): void {
         $plannedAmount = (float) $plannedTransaction->amount;
-        $alreadySettled = (float) $plannedTransaction->transactions()->sum('amount');
-        $remaining = round($plannedAmount - $alreadySettled, 2);
+        $existing = $plannedTransaction->transactions()
+            ->when($excludeTransactionId !== null, fn ($q) => $q->where('id', '!=', $excludeTransactionId))
+            ->sum('amount');
+        $remaining = round($plannedAmount - (float) $existing, 2);
 
         if ($amount > $remaining + 0.0001) {
             throw ValidationException::withMessages([
@@ -81,20 +220,57 @@ class CreateTransaction
                 ]),
             ]);
         }
+    }
 
-        $transaction = Transaction::create([
-            'planned_transaction_id' => $plannedTransaction->id,
-            'amount' => $amount,
-            'occurred_on' => $occurredOn,
-            'note' => $note,
-        ]);
+    /**
+     * Re-evaluates the planned row's status against the current cumulative total of its
+     * transactions and syncs both sides if it's part of a transfer pair.
+     */
+    public function syncPlannedStatusAfterChange(PlannedTransaction $plannedTransaction): void
+    {
+        $plannedAmount = (float) $plannedTransaction->amount;
+        $newTotal = (float) $plannedTransaction->transactions()->sum('amount');
+        $shouldBeSettled = round($newTotal, 2) >= round($plannedAmount, 2);
 
-        $newTotal = round($alreadySettled + $amount, 2);
+        $targetStatus = $shouldBeSettled
+            ? PlannedTransactionStatus::SETTLED
+            : $this->pendingStatusFor($plannedTransaction);
 
-        if ($newTotal >= $plannedAmount && $plannedTransaction->status !== PlannedTransactionStatus::SETTLED) {
-            $plannedTransaction->update(['status' => PlannedTransactionStatus::SETTLED]);
+        if ($plannedTransaction->status !== $targetStatus) {
+            $plannedTransaction->update(['status' => $targetStatus]);
         }
 
-        return $transaction;
+        if ($plannedTransaction->transfer_group_id === null) {
+            return;
+        }
+
+        $siblings = PlannedTransaction::query()
+            ->where('transfer_group_id', $plannedTransaction->transfer_group_id)
+            ->where('id', '!=', $plannedTransaction->id)
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($siblings as $sibling) {
+            if ($sibling->status === PlannedTransactionStatus::CANCELLED) {
+                continue;
+            }
+            if ($sibling->status !== $targetStatus) {
+                $sibling->update(['status' => $targetStatus]);
+            }
+        }
+    }
+
+    private function pendingStatusFor(PlannedTransaction $plannedTransaction): PlannedTransactionStatus
+    {
+        if ($plannedTransaction->status === PlannedTransactionStatus::CANCELLED) {
+            return PlannedTransactionStatus::CANCELLED;
+        }
+
+        $dueDate = $plannedTransaction->due_date;
+        if ($dueDate !== null && $dueDate->isPast()) {
+            return PlannedTransactionStatus::OVERDUE;
+        }
+
+        return PlannedTransactionStatus::PLANNED;
     }
 }

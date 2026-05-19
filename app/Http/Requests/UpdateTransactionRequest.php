@@ -8,18 +8,11 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class StoreTransactionRequest extends FormRequest
+class UpdateTransactionRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
-    }
-
-    protected function prepareForValidation(): void
-    {
-        if (! $this->filled('occurred_on')) {
-            $this->merge(['occurred_on' => now()->toDateString()]);
-        }
     }
 
     /**
@@ -28,7 +21,6 @@ class StoreTransactionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'planned_transaction_id' => ['nullable', 'integer', 'exists:planned_transactions,id'],
             'from_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
             'to_account_id' => ['nullable', 'integer', 'exists:accounts,id', 'different:from_account_id'],
             'counterparty_id' => ['nullable', 'integer', 'exists:counterparties,id'],
@@ -43,12 +35,8 @@ class StoreTransactionRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            if (
-                ! $this->filled('from_account_id')
-                && ! $this->filled('to_account_id')
-                && ! $this->filled('planned_transaction_id')
-            ) {
-                $validator->errors()->add('from_account_id', __('Pick at least one account or a planned transaction.'));
+            if (! $this->filled('from_account_id') && ! $this->filled('to_account_id')) {
+                $validator->errors()->add('from_account_id', __('Pick at least one account.'));
             }
         });
     }

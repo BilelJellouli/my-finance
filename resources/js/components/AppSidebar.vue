@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, Building2, CalendarClock, CalendarSync, FolderGit2, LayoutGrid } from 'lucide-vue-next';
+import { ArrowLeftRight, BookOpen, Building2, CalendarClock, CalendarSync, FolderGit2, LayoutGrid } from 'lucide-vue-next';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -18,6 +18,7 @@ import { dashboard } from '@/routes';
 import * as entities from '@/routes/entities';
 import * as plannedTransactions from '@/routes/planned-transactions';
 import * as recurringPlans from '@/routes/recurring-plans';
+import * as transactions from '@/routes/transactions';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -40,6 +41,11 @@ const mainNavItems: NavItem[] = [
         title: 'Recurring',
         href: recurringPlans.index(),
         icon: CalendarSync,
+    },
+    {
+        title: 'Transactions',
+        href: transactions.index(),
+        icon: ArrowLeftRight,
     },
 ];
 

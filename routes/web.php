@@ -30,8 +30,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('planned-transactions/{plannedTransaction}', [PlannedTransactionController::class, 'destroy'])
         ->name('planned-transactions.destroy');
 
-    Route::post('planned-transactions/{plannedTransaction}/transactions', [TransactionController::class, 'store'])
-        ->name('planned-transactions.transactions.store');
+    Route::get('transactions', [TransactionController::class, 'index'])->name('transactions.index');
+    Route::post('transactions', [TransactionController::class, 'store'])->name('transactions.store');
+    Route::put('transactions/{transaction}', [TransactionController::class, 'update'])->name('transactions.update');
+    Route::delete('transactions/{transaction}', [TransactionController::class, 'destroy'])->name('transactions.destroy');
 
     Route::get('recurring-plans', [RecurringPlanController::class, 'index'])
         ->name('recurring-plans.index');

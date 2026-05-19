@@ -9,9 +9,11 @@ use App\Enums\CounterpartyKind;
 use App\Enums\Currency;
 use App\Enums\PlannedTransactionDirection;
 use App\Enums\PlannedTransactionStatus;
+use App\Enums\TransactionKind;
 use App\Http\Requests\DeletePlannedTransactionRequest;
 use App\Http\Requests\StorePlannedTransactionRequest;
 use App\Http\Requests\UpdatePlannedTransactionRequest;
+use App\Models\Account;
 use App\Models\Counterparty;
 use App\Models\Entity;
 use App\Models\PlannedTransaction;
@@ -105,10 +107,38 @@ class PlannedTransactionController extends Controller implements HasMiddleware
 
         $transactions = $query->paginate(25)->withQueryString();
 
+        $transferGroupIds = $transactions->getCollection()
+            ->pluck('transfer_group_id')
+            ->filter()
+            ->unique()
+            ->all();
+
+        $siblingsByGroup = collect();
+        if (! empty($transferGroupIds)) {
+            $siblingsByGroup = PlannedTransaction::query()
+                ->whereIn('transfer_group_id', $transferGroupIds)
+                ->get(['id', 'transfer_group_id', 'account_id', 'owner_entity_id'])
+                ->groupBy('transfer_group_id');
+        }
+
+        $mirrorAccountFor = function (PlannedTransaction $txn) use ($siblingsByGroup): ?int {
+            if ($txn->transfer_group_id === null) {
+                return null;
+            }
+            $group = $siblingsByGroup->get($txn->transfer_group_id, collect());
+            $sibling = $group->firstWhere('id', '!=', $txn->id);
+
+            return $sibling?->account_id;
+        };
+
         $entities = $user->entities()
             ->orderByRaw("CASE WHEN type = 'personal' THEN 0 ELSE 1 END")
             ->orderBy('name')
-            ->get(['id', 'name', 'type', 'color']);
+            ->with(['accounts' => fn ($q) => $q
+                ->withSum('transactionsTo as incoming_sum', 'amount')
+                ->withSum('transactionsFrom as outgoing_sum', 'amount')
+                ->orderBy('name')])
+            ->get();
 
         $purposes = PlannedTransaction::query()
             ->whereHas('ownerEntity', fn (Builder $q) => $q->where('user_id', $user->id))
@@ -137,6 +167,9 @@ class PlannedTransactionController extends Controller implements HasMiddleware
                     'is_mandatory' => $txn->is_mandatory,
                     'note' => $txn->note,
                     'transfer_group_id' => $txn->transfer_group_id,
+                    'account_id' => $txn->account_id,
+                    'mirror_account_id' => $mirrorAccountFor($txn),
+                    'owner_entity_id' => $txn->owner_entity_id,
                     'owner_entity' => [
                         'id' => $txn->ownerEntity->id,
                         'name' => $txn->ownerEntity->name,
@@ -147,6 +180,7 @@ class PlannedTransactionController extends Controller implements HasMiddleware
                         'id' => $txn->counterparty->id,
                         'name' => $txn->counterparty->displayName(),
                         'kind' => $txn->counterparty->kind,
+                        'entity_id' => $txn->counterparty->entity_id,
                     ],
                     'real_transactions' => $txn->transactions->map(fn (Transaction $t) => [
                         'id' => $t->id,
@@ -178,6 +212,12 @@ class PlannedTransactionController extends Controller implements HasMiddleware
                     'name' => $e->name,
                     'type' => $e->type,
                     'color' => $e->color,
+                    'accounts' => $e->accounts->map(fn (Account $a) => [
+                        'id' => $a->id,
+                        'name' => $a->name,
+                        'currency' => $a->currency,
+                        'current_balance' => number_format($a->currentBalance(), 2, '.', ''),
+                    ])->all(),
                 ])->all(),
                 'directions' => array_map(
                     fn (PlannedTransactionDirection $d) => ['value' => $d->value, 'label' => $d->label()],
@@ -196,6 +236,10 @@ class PlannedTransactionController extends Controller implements HasMiddleware
                     'id' => $c->id,
                     'name' => $c->name,
                 ])->all(),
+                'kinds' => array_map(
+                    fn (TransactionKind $k) => ['value' => $k->value, 'label' => $k->label()],
+                    TransactionKind::cases(),
+                ),
                 'sortable' => self::SORTABLE_COLUMNS,
             ],
         ]);

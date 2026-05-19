@@ -21,7 +21,7 @@ class AccountFactory extends Factory
             'entity_id' => Entity::factory(),
             'name' => fake()->randomElement(['Main', 'Checking', 'Savings', 'Operating']),
             'currency' => fake()->randomElement(Currency::cases()),
-            'amount' => fake()->randomFloat(2, 0, 10000),
+            'amount' => fake()->randomFloat(2, 100000, 1000000),
             'is_main' => false,
         ];
     }
