@@ -18,6 +18,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('entities', EntityController::class)->except(['show']);
     Route::post('entities/{entity}/accounts', [AccountController::class, 'store'])->name('accounts.store');
+    Route::get('accounts/{account}', [AccountController::class, 'show'])->name('accounts.show');
     Route::put('accounts/{account}', [AccountController::class, 'update'])->name('accounts.update');
     Route::delete('accounts/{account}', [AccountController::class, 'destroy'])->name('accounts.destroy');
 

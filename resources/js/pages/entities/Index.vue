@@ -16,6 +16,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import TransactionDialog from '@/pages/transactions/TransactionDialog.vue';
+import * as accountRoutes from '@/routes/accounts';
 import * as entityRoutes from '@/routes/entities';
 import type { EntityWithAccounts } from '@/types';
 import { ENTITY_COLOR_SWATCH } from './colors';
@@ -188,7 +189,10 @@ defineOptions({
                         :key="account.id"
                         class="flex items-center justify-between gap-2 text-sm"
                     >
-                        <div class="flex min-w-0 items-center gap-2">
+                        <Link
+                            :href="accountRoutes.show(account.id).url"
+                            class="flex min-w-0 items-center gap-2 hover:underline"
+                        >
                             <Star
                                 v-if="account.is_main"
                                 class="size-3.5 shrink-0 fill-amber-400 text-amber-400"
@@ -196,7 +200,7 @@ defineOptions({
                             />
                             <span v-else class="inline-block size-3.5 shrink-0" aria-hidden="true" />
                             <span class="truncate">{{ account.name }}</span>
-                        </div>
+                        </Link>
                         <div class="flex items-center gap-2">
                             <span class="font-mono tabular-nums">{{ formatAmount(account.current_balance) }}</span>
                             <span class="rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">

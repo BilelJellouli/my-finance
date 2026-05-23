@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { Form, useForm } from '@inertiajs/vue3';
-import { ChevronDown, Star, Trash2 } from 'lucide-vue-next';
+import { Form, Link, useForm } from '@inertiajs/vue3';
+import { ChevronDown, ListOrdered, Star, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 import AccountController from '@/actions/App/Http/Controllers/AccountController';
+import * as accountRoutes from '@/routes/accounts';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -144,7 +145,15 @@ const deleteDialogOpen = ref(false);
                 </div>
 
                 <div class="flex items-center justify-between gap-3">
-                    <Button type="submit" :disabled="form.processing">Save account</Button>
+                    <div class="flex items-center gap-2">
+                        <Button type="submit" :disabled="form.processing">Save account</Button>
+                        <Button type="button" variant="outline" as-child>
+                            <Link :href="accountRoutes.show(account.id).url">
+                                <ListOrdered class="size-4" />
+                                View ledger
+                            </Link>
+                        </Button>
+                    </div>
 
                     <Dialog v-if="!account.is_main" v-model:open="deleteDialogOpen">
                         <DialogTrigger as-child>
